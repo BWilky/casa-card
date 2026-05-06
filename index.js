@@ -155,7 +155,16 @@ export class CasaProvisionCard extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         window.addEventListener('hashchange', this.handleHashChange);
-        this.handleHashChange();
+        window.addEventListener('location-changed', this.handleHashChange);
+        
+        this._windowEventHandler = (e) => {
+            if (e.detail && e.detail.casa_action === 'start') {
+                this.startFlow();
+            }
+        };
+        window.addEventListener('ll-custom', this._windowEventHandler);
+        
+        setTimeout(() => this.handleHashChange(), 100);
     }
 
     // --- SAFE EVENT SUBSCRIPTION (Fires ONLY when 'this.hass' is ready) ---
@@ -178,6 +187,8 @@ export class CasaProvisionCard extends LitElement {
 
     disconnectedCallback() {
         window.removeEventListener('hashchange', this.handleHashChange);
+        window.removeEventListener('location-changed', this.handleHashChange);
+        window.removeEventListener('ll-custom', this._windowEventHandler);
         this.clearTimers();
 
         // Safely execute the unsubscribe function if it exists
@@ -208,9 +219,11 @@ export class CasaProvisionCard extends LitElement {
 
     handleHashChange = () => {
         const currentHash = window.location.hash.replace('#', '');
-        if (currentHash === this.config.hash_url && this.activePane === 'hidden') {
+        const targetHash = (this.config.hash_url || 'qr-code').replace('#', '');
+        
+        if (currentHash === targetHash && this.activePane === 'hidden') {
             this.startFlow();
-        } else if (currentHash !== this.config.hash_url && this.activePane !== 'hidden') {
+        } else if (currentHash !== targetHash && this.activePane !== 'hidden') {
             this.closePopup();
         }
     };
@@ -231,7 +244,11 @@ export class CasaProvisionCard extends LitElement {
     }
 
     startFlow() {
-        window.location.hash = this.config.hash_url || 'qr-code';
+        const targetHash = (this.config.hash_url || 'qr-code').replace('#', '');
+        if (window.location.hash.replace('#', '') !== targetHash) {
+            window.location.hash = targetHash;
+        }
+        
         this.activePane = this.config.intro ? 'intro' : (this.config.intro_app ? 'app_links' : 'selection');
         this.appQrUrl = null;
         this.guestData = null;
