@@ -6,54 +6,54 @@ const css = LitElement.prototype.css;
 // NATIVE FIRE EVENT
 // ============================================================================
 const fireEvent = (node, type, detail) => {
-    const event = new Event(type, {
-        bubbles: true,
-        cancelable: false,
-        composed: true,
-    });
-    event.detail = detail;
-    node.dispatchEvent(event);
-    return event;
+  const event = new Event(type, {
+    bubbles: true,
+    cancelable: false,
+    composed: true,
+  });
+  event.detail = detail;
+  node.dispatchEvent(event);
+  return event;
 };
 
 // ============================================================================
 // 1. THE EDITOR ELEMENT
 // ============================================================================
 export class CasaProvisionCardEditor extends LitElement {
-    static get properties() {
-        return {
-            hass: { attribute: false },
-            _config: { state: true }
-        };
-    }
+  static get properties() {
+    return {
+      hass: { attribute: false },
+      _config: { state: true }
+    };
+  }
 
-    setConfig(config) {
-        this._config = config;
-    }
+  setConfig(config) {
+    this._config = config;
+  }
 
-    get _schema() {
-        return [
-            { name: 'hidden', selector: { boolean: {} } },
-            { name: 'hash_url', selector: { text: {} }, default: 'qr-code' },
-            { name: 'intro_timeout', selector: { number: { min: 0, max: 300, mode: 'box' } }, default: 30 },
-            { name: 'intro_app', selector: { boolean: {} }, default: true },
-            { name: 'ios_url', selector: { text: {} }, default: 'https://apps.apple.com' },
-            { name: 'android_url', selector: { text: {} }, default: 'https://play.google.com' },
-            { name: 'ble_progress_entity', selector: { entity: { domain: 'sensor' } } },
-            { name: 'ble_state_entity', selector: { entity: { domain: 'sensor', domain: 'text' } } },
-            { name: 'qr_service', selector: { object: {} } },
-            { name: 'ble_service', selector: { object: {} } },
-        ];
-    }
+  get _schema() {
+    return [
+      { name: 'hidden', selector: { boolean: {} } },
+      { name: 'hash_url', selector: { text: {} }, default: 'qr-code' },
+      { name: 'intro_timeout', selector: { number: { min: 0, max: 300, mode: 'box' } }, default: 30 },
+      { name: 'intro_app', selector: { boolean: {} }, default: true },
+      { name: 'ios_url', selector: { text: {} }, default: 'https://apps.apple.com' },
+      { name: 'android_url', selector: { text: {} }, default: 'https://play.google.com' },
+      { name: 'ble_progress_entity', selector: { entity: { domain: 'sensor' } } },
+      { name: 'ble_state_entity', selector: { entity: { domain: 'sensor', domain: 'text' } } },
+      { name: 'qr_service', selector: { object: {} } },
+      { name: 'ble_service', selector: { object: {} } },
+    ];
+  }
 
-    _valueChanged(ev) {
-        fireEvent(this, 'config-changed', { config: ev.detail.value });
-    }
+  _valueChanged(ev) {
+    fireEvent(this, 'config-changed', { config: ev.detail.value });
+  }
 
-    render() {
-        if (!this.hass || !this._config) return html``;
+  render() {
+    if (!this.hass || !this._config) return html``;
 
-        return html`
+    return html`
       <ha-form
         .hass=${this.hass}
         .data=${this._config}
@@ -62,378 +62,439 @@ export class CasaProvisionCardEditor extends LitElement {
         @value-changed=${this._valueChanged}
       ></ha-form>
     `;
-    }
+  }
 
-    _computeLabel(schema) {
-        const labels = {
-            hidden: 'Hide Tile (Trigger via Hash/Button only)',
-            hash_url: 'Trigger Hash URL (e.g., qr-code)',
-            intro_timeout: 'Intro Timeout (Seconds, 0 = no timeout)',
-            intro_app: 'Show App Download Pane',
-            ios_url: 'iOS App Store URL',
-            android_url: 'Android Play Store URL',
-            ble_progress_entity: 'BLE Progress Sensor Entity ID',
-            ble_state_entity: 'BLE State Sensor Entity ID',
-            qr_service: 'QR Service YAML Dictionary',
-            ble_service: 'BLE Service YAML Dictionary',
-        };
-        return labels[schema.name] || schema.name;
-    }
+  _computeLabel(schema) {
+    const labels = {
+      hidden: 'Hide Tile (Trigger via Hash/Button only)',
+      hash_url: 'Trigger Hash URL (e.g., qr-code)',
+      intro_timeout: 'Intro Timeout (Seconds, 0 = no timeout)',
+      intro_app: 'Show App Download Pane',
+      ios_url: 'iOS App Store URL',
+      android_url: 'Android Play Store URL',
+      ble_progress_entity: 'BLE Progress Sensor Entity ID',
+      ble_state_entity: 'BLE State Sensor Entity ID',
+      qr_service: 'QR Service YAML Dictionary',
+      ble_service: 'BLE Service YAML Dictionary',
+    };
+    return labels[schema.name] || schema.name;
+  }
 }
 
 if (!customElements.get('casa-provision-card-editor')) {
-    customElements.define('casa-provision-card-editor', CasaProvisionCardEditor);
+  customElements.define('casa-provision-card-editor', CasaProvisionCardEditor);
 }
 
 // ============================================================================
 // 2. THE MAIN CARD ELEMENT
 // ============================================================================
 export class CasaProvisionCard extends LitElement {
-    static get properties() {
-        return {
-            hass: { attribute: false },
-            config: { state: true },
-            activePane: { state: true },
-            qrData: { state: true },
-            countdown: { state: true },
-            isExpired: { state: true },
-            appQrUrl: { state: true },
-            guestData: { state: true },
-            serviceError: { state: true },
-            lastAction: { state: true },
-            isBleInitializing: { state: true }
-        };
-    }
-
-    constructor() {
-        super();
-        this.activePane = 'hidden';
-        this.qrData = null;
-        this.countdown = 0;
-        this.isExpired = false;
-        this.countdownTimer = undefined;
-        this.appQrUrl = null;
-        this.guestData = null;
-        this.serviceError = null;
-        this.lastAction = null;
-        this.isBleInitializing = false;
-        this._bleCleared = true;
-        this._isAuthenticatingLatch = false;
-        this._isSubscribed = false; // Tracks HA subscription state safely
-    }
-
-    static async getConfigElement() {
-        return document.createElement('casa-provision-card-editor');
-    }
-
-    static getStubConfig() {
-        return {
-            type: 'custom:casa-provision-card',
-            hidden: false,
-            hash_url: 'qr-code',
-            intro_timeout: 30,
-            intro_app: true,
-            ios_url: 'https://apps.apple.com',
-            android_url: 'https://play.google.com'
-        };
-    }
-
-    setConfig(config) {
-        if (!config) throw new Error("Invalid configuration");
-        this.config = {
-            intro_timeout: 30,
-            intro_app: true,
-            hash_url: 'qr-code',
-            ios_url: 'https://apps.apple.com',
-            android_url: 'https://play.google.com',
-            ble_progress_entity: 'sensor.casa_transfer_progress',
-            ble_state_entity: 'sensor.casa_transponder_state',
-            ...config
-        };
-    }
-
-    connectedCallback() {
-        super.connectedCallback();
-        window.addEventListener('hashchange', this.handleHashChange);
-        window.addEventListener('location-changed', this.handleHashChange);
-        
-        this._windowEventHandler = (e) => {
-            if (e.detail && e.detail.casa_action === 'start') {
-                this.startFlow();
-            }
-        };
-        window.addEventListener('ll-custom', this._windowEventHandler);
-        
-        setTimeout(() => this.handleHashChange(), 100);
-    }
-
-    // --- SAFE EVENT SUBSCRIPTION (Fires ONLY when 'this.hass' is ready) ---
-    updated(changedProperties) {
-        super.updated(changedProperties);
-
-        if (changedProperties.has('hass') && this.hass && !this._isSubscribed) {
-            this._isSubscribed = true;
-            this.hass.connection.subscribeEvents(
-                (event) => this.handleCodeRedeemed(event),
-                'casa_code_redeemed'
-            ).then(unsub => {
-                this._unsubEvents = unsub; // Save the unsubscribe function
-            }).catch(err => {
-                console.error("Casa: Failed to subscribe to redeemed events:", err);
-                this._isSubscribed = false; // Allow retry if it failed
-            });
-        }
-    }
-
-    disconnectedCallback() {
-        window.removeEventListener('hashchange', this.handleHashChange);
-        window.removeEventListener('location-changed', this.handleHashChange);
-        window.removeEventListener('ll-custom', this._windowEventHandler);
-        this.clearTimers();
-
-        // Safely execute the unsubscribe function if it exists
-        if (this._unsubEvents && typeof this._unsubEvents === 'function') {
-            this._unsubEvents();
-            this._unsubEvents = null;
-        }
-        this._isSubscribed = false;
-
-        super.disconnectedCallback();
-    }
-
-    async clearBleBeacon() {
-        if (!this.hass || this.lastAction !== 'ble' || this._bleCleared) return;
-
-        this._bleCleared = true;
-        try {
-            await this.hass.callWS({
-                type: 'call_service',
-                domain: 'casa',
-                service: 'clear_ble_beacon',
-            });
-            console.log("BLE Beacon cleared safely.");
-        } catch (e) {
-            console.error("Failed to clear BLE beacon", e);
-        }
-    }
-
-    handleHashChange = () => {
-        const currentHash = window.location.hash.replace('#', '');
-        const targetHash = (this.config.hash_url || 'qr-code').replace('#', '');
-        
-        if (currentHash === targetHash && this.activePane === 'hidden') {
-            this.startFlow();
-        } else if (currentHash !== targetHash && this.activePane !== 'hidden') {
-            this.closePopup();
-        }
+  static get properties() {
+    return {
+      hass: { attribute: false },
+      config: { state: true },
+      activePane: { state: true },
+      qrData: { state: true },
+      countdown: { state: true },
+      isExpired: { state: true },
+      appQrUrl: { state: true },
+      guestData: { state: true },
+      serviceError: { state: true },
+      lastAction: { state: true },
+      isBleInitializing: { state: true }
     };
+  }
 
-    handleCodeRedeemed(event) {
-        if (this.activePane !== 'hidden') {
-            if (this.lastAction === 'ble') {
-                this.clearBleBeacon();
-            }
+  constructor() {
+    super();
+    this.activePane = 'hidden';
+    this.qrData = null;
+    this.countdown = 0;
+    this.isExpired = false;
+    this.countdownTimer = undefined;
+    this.appQrUrl = null;
+    this.guestData = null;
+    this.serviceError = null;
+    this.lastAction = null;
+    this.isBleInitializing = false;
+    this._bleCleared = true;
+    this._isAuthenticatingLatch = false;
+    this._isSubscribed = false; // Tracks HA subscription state safely
+    this._openedViaHash = false;
+    this._initialHashMatched = false;
+    this._initialHash = window.location.hash.replace('#', '');
+    this._initialSearch = window.location.search.replace('?', '');
+  }
 
-            this.clearTimers();
-            this.qrData = null;
-            this.appQrUrl = null;
-            this.guestData = event.data; // Raw event.data perfectly matches your JSON payload
-            this.activePane = 'success';
-            setTimeout(() => this.closePopup(), 4000);
-        }
+  static async getConfigElement() {
+    return document.createElement('casa-provision-card-editor');
+  }
+
+  static getStubConfig() {
+    return {
+      type: 'custom:casa-provision-card',
+      hidden: false,
+      hash_url: 'qr-code',
+      intro_timeout: 30,
+      intro_app: true,
+      ios_url: 'https://apps.apple.com',
+      android_url: 'https://play.google.com'
+    };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Invalid configuration");
+    this.config = {
+      intro_timeout: 30,
+      intro_app: true,
+      hash_url: 'qr-code',
+      ios_url: 'https://apps.apple.com',
+      android_url: 'https://play.google.com',
+      ble_progress_entity: 'sensor.casa_transfer_progress',
+      ble_state_entity: 'sensor.casa_transponder_state',
+      ...config
+    };
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('hashchange', this.handleHashChange);
+    window.addEventListener('location-changed', this.handleHashChange);
+
+    this._windowEventHandler = (e) => {
+      if (e.detail && e.detail.casa_action === 'start') {
+        this._openedViaHash = false;
+        this.startFlow();
+      }
+    };
+    window.addEventListener('ll-custom', this._windowEventHandler);
+
+    // Evaluate initial hash/search immediately before router strips it
+    this.evaluateInitialMatch();
+
+    setTimeout(() => this.handleHashChange(), 100);
+  }
+
+  evaluateInitialMatch() {
+    if (!this.config) return;
+    const targetHash = (this.config.hash_url || 'qr-code').replace('#', '').replace('?', '');
+    const hasHashMatch = this._initialHash === targetHash;
+    const hasSearchMatch = this._initialSearch === targetHash || 
+                           this._initialSearch.split('&').includes(targetHash) ||
+                           this._initialSearch.split('&').some(param => param.startsWith(targetHash + '='));
+
+    if (hasHashMatch || hasSearchMatch) {
+      this._initialHashMatched = true;
+    }
+  }
+
+  // --- SAFE EVENT SUBSCRIPTION (Fires ONLY when 'this.hass' is ready) ---
+  updated(changedProperties) {
+    super.updated(changedProperties);
+
+    if (changedProperties.has('hass') && this.hass && !this._isSubscribed) {
+      this._isSubscribed = true;
+      this.hass.connection.subscribeEvents(
+        (event) => this.handleCodeRedeemed(event),
+        'casa_code_redeemed'
+      ).then(unsub => {
+        this._unsubEvents = unsub; // Save the unsubscribe function
+      }).catch(err => {
+        console.error("Casa: Failed to subscribe to redeemed events:", err);
+        this._isSubscribed = false; // Allow retry if it failed
+      });
+    }
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('hashchange', this.handleHashChange);
+    window.removeEventListener('location-changed', this.handleHashChange);
+    window.removeEventListener('ll-custom', this._windowEventHandler);
+    this.clearTimers();
+
+    // Safely execute the unsubscribe function if it exists
+    if (this._unsubEvents && typeof this._unsubEvents === 'function') {
+      this._unsubEvents();
+      this._unsubEvents = null;
+    }
+    this._isSubscribed = false;
+
+    super.disconnectedCallback();
+  }
+
+  async clearBleBeacon() {
+    if (!this.hass || this.lastAction !== 'ble' || this._bleCleared) return;
+
+    this._bleCleared = true;
+    try {
+      await this.hass.callWS({
+        type: 'call_service',
+        domain: 'casa',
+        service: 'clear_ble_beacon',
+      });
+      console.log("BLE Beacon cleared safely.");
+    } catch (e) {
+      console.error("Failed to clear BLE beacon", e);
+    }
+  }
+
+  handleHashChange = () => {
+    const currentHash = window.location.hash.replace('#', '');
+    const currentSearch = window.location.search.replace('?', '');
+    const targetHash = (this.config.hash_url || 'qr-code').replace('#', '').replace('?', '');
+
+    const hasHashMatch = currentHash === targetHash;
+    const hasSearchMatch = currentSearch === targetHash || 
+                           currentSearch.split('&').includes(targetHash) ||
+                           currentSearch.split('&').some(param => param.startsWith(targetHash + '='));
+
+    const hasMatch = hasHashMatch || hasSearchMatch || this._initialHashMatched;
+
+    if (hasMatch && this.activePane === 'hidden') {
+      this._openedViaHash = true;
+      this._initialHashMatched = false; // Reset initial match once used
+      this.startFlow();
+    } else if (!hasMatch && this.activePane !== 'hidden' && this._openedViaHash) {
+      this.closePopup();
+    }
+  };
+
+  handleCodeRedeemed(event) {
+    if (this.activePane !== 'hidden') {
+      if (this.lastAction === 'ble') {
+        this.clearBleBeacon();
+      }
+
+      this.clearTimers();
+      this.qrData = null;
+      this.appQrUrl = null;
+      this.guestData = event.data; // Raw event.data perfectly matches your JSON payload
+      this.activePane = 'success';
+      setTimeout(() => this.closePopup(), 4000);
+    }
+  }
+
+  startFlow() {
+    this.activePane = this.config.intro ? 'intro' : (this.config.intro_app ? 'app_links' : 'selection');
+    this.appQrUrl = null;
+    this.guestData = null;
+    this.serviceError = null;
+    this.lastAction = null;
+    this.isBleInitializing = false;
+    this._isAuthenticatingLatch = false;
+
+    if (this.activePane === 'intro' && this.config.intro_timeout !== 0) {
+      this.startUnifiedTimer(this.config.intro_timeout, () => this.nextPane());
+    } else {
+      this.clearTimers();
+    }
+  }
+
+  nextPane() {
+    this.clearTimers();
+    this.appQrUrl = null;
+
+    if (this.activePane === 'intro' && this.config.intro_app) {
+      this.activePane = 'app_links';
+    } else if (this.activePane === 'intro' || this.activePane === 'app_links') {
+
+      const hasQR = !!this.config.qr_service;
+      const hasBLE = !!this.config.ble_service;
+
+      if (hasQR && !hasBLE) {
+        this.generateQR();
+      } else if (hasBLE && !hasQR) {
+        this.provisionBLE();
+      } else {
+        this.activePane = 'selection';
+      }
+    }
+  }
+
+  handleOverlayClick(e) {
+    if (e.target.classList.contains('popup-overlay')) {
+      this.closePopup();
+    }
+  }
+
+  closePopup() {
+    if (this.lastAction === 'ble') {
+      this.clearBleBeacon();
     }
 
-    startFlow() {
-        const targetHash = (this.config.hash_url || 'qr-code').replace('#', '');
-        if (window.location.hash.replace('#', '') !== targetHash) {
-            window.location.hash = targetHash;
-        }
-        
-        this.activePane = this.config.intro ? 'intro' : (this.config.intro_app ? 'app_links' : 'selection');
-        this.appQrUrl = null;
-        this.guestData = null;
-        this.serviceError = null;
-        this.lastAction = null;
-        this.isBleInitializing = false;
-        this._isAuthenticatingLatch = false;
+    this.activePane = 'hidden';
+    this.qrData = null;
+    this.appQrUrl = null;
+    this.guestData = null;
+    this.serviceError = null;
+    this.isExpired = false;
+    this.lastAction = null;
+    this.isBleInitializing = false;
+    this._isAuthenticatingLatch = false;
+    this.clearTimers();
 
-        if (this.activePane === 'intro' && this.config.intro_timeout !== 0) {
-            this.startUnifiedTimer(this.config.intro_timeout, () => this.nextPane());
-        } else {
-            this.clearTimers();
-        }
+    if (this._openedViaHash) {
+      this._openedViaHash = false;
+      let cleanUrl = window.location.pathname;
+      const targetHash = (this.config.hash_url || 'qr-code').replace('#', '').replace('?', '');
+
+      // Clean query parameter if present
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.has(targetHash)) {
+        searchParams.delete(targetHash);
+      }
+      const searchStr = searchParams.toString();
+      if (searchStr) {
+        cleanUrl += '?' + searchStr;
+      }
+
+      // Keep other hashes if there are any, otherwise clear the matched one
+      const currentHash = window.location.hash.replace('#', '');
+      if (currentHash && currentHash !== targetHash) {
+        cleanUrl += '#' + currentHash;
+      }
+
+      window.history.replaceState(null, '', cleanUrl);
     }
+  }
 
-    nextPane() {
-        this.clearTimers();
-        this.appQrUrl = null;
-
-        if (this.activePane === 'intro' && this.config.intro_app) {
-            this.activePane = 'app_links';
-        } else if (this.activePane === 'intro' || this.activePane === 'app_links') {
-
-            const hasQR = !!this.config.qr_service;
-            const hasBLE = !!this.config.ble_service;
-
-            if (hasQR && !hasBLE) {
-                this.generateQR();
-            } else if (hasBLE && !hasQR) {
-                this.provisionBLE();
-            } else {
-                this.activePane = 'selection';
-            }
-        }
+  retryAction() {
+    if (this.lastAction === 'qr') {
+      this.generateQR();
+    } else if (this.lastAction === 'ble') {
+      this.provisionBLE();
     }
+  }
 
-    closePopup() {
-        if (this.lastAction === 'ble') {
-            this.clearBleBeacon();
-        }
+  startUnifiedTimer(durationSeconds, onExpireCallback) {
+    this.clearTimers();
+    if (!durationSeconds || durationSeconds <= 0) return;
 
-        this.activePane = 'hidden';
-        this.qrData = null;
-        this.appQrUrl = null;
-        this.guestData = null;
-        this.serviceError = null;
-        this.isExpired = false;
-        this.lastAction = null;
-        this.isBleInitializing = false;
-        this._isAuthenticatingLatch = false;
-        this.clearTimers();
-        window.history.replaceState(null, '', window.location.pathname);
-    }
+    this.countdown = durationSeconds;
+    this.isExpired = false;
 
-    retryAction() {
-        if (this.lastAction === 'qr') {
-            this.generateQR();
-        } else if (this.lastAction === 'ble') {
-            this.provisionBLE();
-        }
-    }
+    const endTime = Date.now() + durationSeconds * 1000;
 
-    startUnifiedTimer(durationSeconds, onExpireCallback) {
-        this.clearTimers();
-        if (!durationSeconds || durationSeconds <= 0) return;
-
-        this.countdown = durationSeconds;
-        this.isExpired = false;
-
-        const endTime = Date.now() + durationSeconds * 1000;
-
-        this.countdownTimer = window.setInterval(() => {
-            const timeLeftMs = endTime - Date.now();
-            if (timeLeftMs <= 0) {
-                this.countdown = 0;
-                this.isExpired = true;
-                clearInterval(this.countdownTimer);
-
-                if (this.lastAction === 'ble') {
-                    this.clearBleBeacon();
-                }
-
-                if (onExpireCallback) onExpireCallback();
-            } else {
-                this.countdown = Math.ceil(timeLeftMs / 1000);
-            }
-        }, 1000);
-    }
-
-    clearTimers() {
-        if (this.countdownTimer) clearInterval(this.countdownTimer);
-        this.countdownTimer = undefined;
+    this.countdownTimer = window.setInterval(() => {
+      const timeLeftMs = endTime - Date.now();
+      if (timeLeftMs <= 0) {
         this.countdown = 0;
-    }
+        this.isExpired = true;
+        clearInterval(this.countdownTimer);
 
-    async generateQR() {
-        if (!this.config.qr_service) return;
-        this.serviceError = null;
-        this.activePane = 'qr';
-        this.lastAction = 'qr';
-        this._isAuthenticatingLatch = false;
-
-        try {
-            const result = await this.hass.callWS({
-                type: 'call_service',
-                domain: this.config.qr_service.service.split('.')[0],
-                service: this.config.qr_service.service.split('.')[1],
-                service_data: this.config.qr_service.data,
-                return_response: true
-            });
-
-            this.qrData = result.response || result;
-
-            if (this.qrData.error) throw new Error(this.qrData.error);
-            if (!this.qrData.url_path) throw new Error(this.qrData.message || "Invalid response: No QR path provided.");
-
-            const expiresAt = this.qrData.qr_expires_at;
-            const duration = expiresAt ? (expiresAt - Math.floor(Date.now() / 1000)) : 60;
-
-            this.startUnifiedTimer(duration, () => {
-                setTimeout(() => this.closePopup(), 30000);
-            });
-
-        } catch (e) {
-            console.error("QR Generation Failed", e);
-            this.serviceError = e.message || "Failed to generate QR. Check integration configuration.";
-        }
-    }
-
-    async provisionBLE() {
-        if (!this.config.ble_service) return;
-        this.serviceError = null;
-        this.activePane = 'ble';
-        this.lastAction = 'ble';
-        this._bleCleared = false;
-
-        this.isBleInitializing = true;
-        this._isAuthenticatingLatch = false;
-
-        try {
-            const result = await this.hass.callWS({
-                type: 'call_service',
-                domain: this.config.ble_service.service.split('.')[0],
-                service: this.config.ble_service.service.split('.')[1],
-                service_data: this.config.ble_service.data,
-                return_response: true
-            });
-
-            const responseData = result.response || result;
-            const expiresAt = responseData.ble_expires_at;
-            const duration = expiresAt ? (expiresAt - Math.floor(Date.now() / 1000)) : 60;
-
-            this.startUnifiedTimer(duration, () => {
-                setTimeout(() => this.closePopup(), 30000);
-            });
-
-            setTimeout(() => {
-                this.isBleInitializing = false;
-            }, 1500);
-
-        } catch (e) {
-            console.error("BLE Provisioning Failed", e);
-            this.isBleInitializing = false;
-            this.serviceError = e.message || "Failed to start BLE. Check integration configuration.";
-        }
-    }
-
-    render() {
-        const isEditMode = this.closest('hui-card-preview') !== null;
-
-        if (this.config.hidden && this.activePane === 'hidden') {
-            if (isEditMode) {
-                return html`<div class="casa-holder">Casa Provision Holder (Hidden Card)</div>`;
-            }
-            return html``;
+        if (this.lastAction === 'ble') {
+          this.clearBleBeacon();
         }
 
-        return html`
+        if (onExpireCallback) onExpireCallback();
+      } else {
+        this.countdown = Math.ceil(timeLeftMs / 1000);
+      }
+    }, 1000);
+  }
+
+  clearTimers() {
+    if (this.countdownTimer) clearInterval(this.countdownTimer);
+    this.countdownTimer = undefined;
+    this.countdown = 0;
+  }
+
+  async generateQR() {
+    if (!this.config.qr_service) return;
+    this.serviceError = null;
+    this.activePane = 'qr';
+    this.lastAction = 'qr';
+    this._isAuthenticatingLatch = false;
+
+    try {
+      const result = await this.hass.callWS({
+        type: 'call_service',
+        domain: this.config.qr_service.service.split('.')[0],
+        service: this.config.qr_service.service.split('.')[1],
+        service_data: this.config.qr_service.data,
+        return_response: true
+      });
+
+      this.qrData = result.response || result;
+
+      if (this.qrData.error) throw new Error(this.qrData.error);
+      if (!this.qrData.url_path) throw new Error(this.qrData.message || "Invalid response: No QR path provided.");
+
+      let expiresAt = this.qrData.qr_expires_at;
+      if (typeof expiresAt === 'string') {
+        expiresAt = Math.floor(new Date(expiresAt).getTime() / 1000);
+      }
+      const duration = expiresAt && !isNaN(expiresAt) ? (expiresAt - Math.floor(Date.now() / 1000)) : 60;
+
+      this.startUnifiedTimer(duration, () => {
+        setTimeout(() => this.closePopup(), 30000);
+      });
+
+    } catch (e) {
+      console.error("QR Generation Failed", e);
+      this.serviceError = e.message || "Failed to generate QR. Check integration configuration.";
+    }
+  }
+
+  async provisionBLE() {
+    if (!this.config.ble_service) return;
+    this.serviceError = null;
+    this.activePane = 'ble';
+    this.lastAction = 'ble';
+    this._bleCleared = false;
+
+    this.isBleInitializing = true;
+    this._isAuthenticatingLatch = false;
+
+    try {
+      const result = await this.hass.callWS({
+        type: 'call_service',
+        domain: this.config.ble_service.service.split('.')[0],
+        service: this.config.ble_service.service.split('.')[1],
+        service_data: this.config.ble_service.data,
+        return_response: true
+      });
+
+      const responseData = result.response || result;
+      let expiresAt = responseData.ble_expires_at;
+      if (typeof expiresAt === 'string') {
+        expiresAt = Math.floor(new Date(expiresAt).getTime() / 1000);
+      }
+      const duration = expiresAt && !isNaN(expiresAt) ? (expiresAt - Math.floor(Date.now() / 1000)) : 60;
+
+      this.startUnifiedTimer(duration, () => {
+        setTimeout(() => this.closePopup(), 30000);
+      });
+
+      setTimeout(() => {
+        this.isBleInitializing = false;
+      }, 1500);
+
+    } catch (e) {
+      console.error("BLE Provisioning Failed", e);
+      this.isBleInitializing = false;
+      this.serviceError = e.message || "Failed to start BLE. Check integration configuration.";
+    }
+  }
+
+  render() {
+    const isEditMode = this.closest('hui-card-preview') !== null;
+
+    if (this.config.hidden && this.activePane === 'hidden') {
+      if (isEditMode) {
+        return html`<div class="casa-holder">Casa Provision Holder (Hidden Card)</div>`;
+      }
+      return html``;
+    }
+
+    return html`
       ${this.activePane === 'hidden' && !this.config.hidden ? this.renderTileButton() : ''}
       ${this.activePane !== 'hidden' ? this.renderPopupOverlay() : ''}
     `;
-    }
+  }
 
-    renderTileButton() {
-        return html`
+  renderTileButton() {
+    return html`
       <ha-card @click=${this.startFlow} class="tile-button">
         <div class="tile-content">
           <ha-icon icon="mdi:qrcode-scan"></ha-icon>
@@ -441,10 +502,10 @@ export class CasaProvisionCard extends LitElement {
         </div>
       </ha-card>
     `;
-    }
+  }
 
-    renderPopupOverlay() {
-        return html`
+  renderPopupOverlay() {
+    return html`
       <div class="popup-overlay" @click=${this.handleOverlayClick}>
         <div class="popup-card casa-theme">
           
@@ -529,10 +590,10 @@ export class CasaProvisionCard extends LitElement {
         </div>
       </div>
     `;
-    }
+  }
 
-    renderQRView() {
-        if (this.serviceError) return html`
+  renderQRView() {
+    if (this.serviceError) return html`
       <div class="pane fade-in">
         <div class="error-animation">
           <svg class="cross" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
@@ -550,60 +611,60 @@ export class CasaProvisionCard extends LitElement {
       </div>
     `;
 
-        // ----------------------------------------------------
-        // BLE UI RENDERING
-        // ----------------------------------------------------
-        if (this.activePane === 'ble') {
+    // ----------------------------------------------------
+    // BLE UI RENDERING
+    // ----------------------------------------------------
+    if (this.activePane === 'ble') {
 
-            // 1. HARD LOCK: Initializing State. Completely skip reading HA state until safe.
-            if (this.isBleInitializing || (this.countdown === 0 && !this.isExpired)) {
-                return html`
+      // 1. HARD LOCK: Initializing State. Completely skip reading HA state until safe.
+      if (this.isBleInitializing || (this.countdown === 0 && !this.isExpired)) {
+        return html`
           <div class="pane fade-in">
             <div class="casa-spinner large"></div>
             <h2>Initializing BLE...</h2>
             <p class="casa-subtitle">Starting Bluetooth payload.</p>
           </div>
         `;
-            }
+      }
 
-            // 2. SAFE TO READ STATE: Once the lock drops, fetch the actual sensor data
-            let currentProgress = 0;
-            let currentState = 'idle';
+      // 2. SAFE TO READ STATE: Once the lock drops, fetch the actual sensor data
+      let currentProgress = 0;
+      let currentState = 'idle';
 
-            if (this.hass) {
-                const pEnt = this.hass.states[this.config.ble_progress_entity];
-                const sEnt = this.hass.states[this.config.ble_state_entity];
-                if (pEnt && !isNaN(parseInt(pEnt.state, 10))) {
-                    currentProgress = parseInt(pEnt.state, 10);
-                }
-                if (sEnt && sEnt.state) {
-                    currentState = sEnt.state.toLowerCase();
-                }
-            }
+      if (this.hass) {
+        const pEnt = this.hass.states[this.config.ble_progress_entity];
+        const sEnt = this.hass.states[this.config.ble_state_entity];
+        if (pEnt && !isNaN(parseInt(pEnt.state, 10))) {
+          currentProgress = parseInt(pEnt.state, 10);
+        }
+        if (sEnt && sEnt.state) {
+          currentState = sEnt.state.toLowerCase();
+        }
+      }
 
-            // LATCH TRIGGER: If HA says we reached 100%, lock the UI into Authenticating
-            if (currentProgress >= 100 || currentState.includes('transfered') || currentState.includes('transferred')) {
-                this._isAuthenticatingLatch = true;
-            }
+      // LATCH TRIGGER: If HA says we reached 100%, lock the UI into Authenticating
+      if (currentProgress >= 100 || currentState.includes('transfered') || currentState.includes('transferred')) {
+        this._isAuthenticatingLatch = true;
+      }
 
-            // 3. Authenticating State (Takes priority once latched)
-            if (this._isAuthenticatingLatch) {
-                return html`
+      // 3. Authenticating State (Takes priority once latched)
+      if (this._isAuthenticatingLatch) {
+        return html`
           <div class="pane fade-in">
             <div class="casa-spinner large"></div>
             <h2>Authenticating...</h2>
             <p class="casa-subtitle">Verifying guest credentials.</p>
           </div>
         `;
-            }
+      }
 
-            // 4. Transferring State (Active Data Exchange)
-            else if (currentProgress > 0 || currentState === 'transferring') {
-                const radius = 46;
-                const circumference = 2 * Math.PI * radius;
-                const offset = circumference - (currentProgress / 100) * circumference;
+      // 4. Transferring State (Active Data Exchange)
+      else if (currentProgress > 0 || currentState === 'transferring') {
+        const radius = 46;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (currentProgress / 100) * circumference;
 
-                return html`
+        return html`
           <div class="pane fade-in">
             <div class="progress-ring-container">
                <svg width="100" height="100" style="transform: rotate(-90deg);">
@@ -620,15 +681,15 @@ export class CasaProvisionCard extends LitElement {
             </div>
           </div>
         `;
-            }
+      }
 
-            // 5. Broadcasting State (Default active state waiting for user)
-            else {
-                const minutes = Math.floor(this.countdown / 60);
-                const seconds = this.countdown % 60;
-                const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      // 5. Broadcasting State (Default active state waiting for user)
+      else {
+        const minutes = Math.floor(this.countdown / 60);
+        const seconds = this.countdown % 60;
+        const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-                return html`
+        return html`
           <div class="pane fade-in">
              <h2>BLE Provisioning</h2>
              <p class="casa-subtitle">Bring your guest device near the transponder.</p>
@@ -653,13 +714,13 @@ export class CasaProvisionCard extends LitElement {
              </div>
           </div>
         `;
-            }
-        }
+      }
+    }
 
-        // ----------------------------------------------------
-        // QR UI RENDERING (Fallback)
-        // ----------------------------------------------------
-        if (!this.qrData) return html`
+    // ----------------------------------------------------
+    // QR UI RENDERING (Fallback)
+    // ----------------------------------------------------
+    if (!this.qrData) return html`
       <div class="pane fade-in">
         <div class="casa-spinner large"></div>
         <h2>Generating QR...</h2>
@@ -667,11 +728,11 @@ export class CasaProvisionCard extends LitElement {
       </div>
     `;
 
-        const qMin = Math.floor(this.countdown / 60);
-        const qSec = this.countdown % 60;
-        const qTime = `${qMin.toString().padStart(2, '0')}:${qSec.toString().padStart(2, '0')}`;
+    const qMin = Math.floor(this.countdown / 60);
+    const qSec = this.countdown % 60;
+    const qTime = `${qMin.toString().padStart(2, '0')}:${qSec.toString().padStart(2, '0')}`;
 
-        return html`
+    return html`
       <div class="pane pane-qr fade-in">
         <h2>Guest Access Provisioning</h2>
         <p class="casa-subtitle">Scan the code below to connect your guest device.</p>
@@ -693,10 +754,10 @@ export class CasaProvisionCard extends LitElement {
         </div>
       </div>
     `;
-    }
+  }
 
-    static get styles() {
-        return css`
+  static get styles() {
+    return css`
       /* --- TILE BUTTON --- */
       ha-card.tile-button {
         cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -823,17 +884,17 @@ export class CasaProvisionCard extends LitElement {
       @keyframes stroke { 100% { stroke-dashoffset: 0; } }
       @keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } }
     `;
-    }
+  }
 }
 
 if (!customElements.get('casa-provision-card')) {
-    customElements.define('casa-provision-card', CasaProvisionCard);
+  customElements.define('casa-provision-card', CasaProvisionCard);
 }
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-    type: 'casa-provision-card',
-    name: 'Casa Provision Card',
-    preview: true,
-    description: 'A custom card for Casa QR and BLE provisioning flows.',
+  type: 'casa-provision-card',
+  name: 'Casa Provision Card',
+  preview: true,
+  description: 'A custom card for Casa QR and BLE provisioning flows.',
 });

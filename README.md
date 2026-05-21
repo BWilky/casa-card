@@ -1,27 +1,111 @@
 # Casa Provisioning Card
 
-A custom Lovelace card for Home Assistant to handle Casa provisioning via QR code and Bluetooth (BLE).
+A Home Assistant Lovelace card to provision Casa devices via QR code or Bluetooth (BLE). It can be rendered as a card on your dashboard, hidden to run in the background via URL parameters/hashes, or triggered from other cards.
 
-## Installation via HACS
+## Installation
 
-1. Go to **HACS** in your Home Assistant instance.
-2. Click on **Frontend**.
-3. Click the three dots (menu) in the top right corner and select **Custom repositories**.
-4. Add your GitHub repository URL (e.g., `https://github.com/yourusername/casa-card`) and select **Dashboard** (or **Lovelace**) as the category.
-5. Click **Add** and then **Download** the new Casa Provisioning Card repository that appears.
-6. When prompted, reload your browser.
+### HACS
+1. In Home Assistant, navigate to **HACS** > **Frontend**.
+2. Click the three dots in the top right, select **Custom repositories**.
+3. Add the URL of this repository and select **Dashboard** as the category.
+4. Click **Add**, click **Download**, and reload your browser when prompted.
 
-## Manual Installation
-
+### Manual
 1. Download `index.js` from the latest release.
-2. Copy `index.js` into your `<config>/www/casa-card/` directory.
-3. Add the resource reference in your Home Assistant configuration (Settings -> Dashboards -> Resources):
-   - URL: `/local/casa-card/index.js`
-   - Type: JavaScript Module
+2. Save it to `<config>/www/casa-card/index.js`.
+3. In Home Assistant, go to **Settings** > **Dashboards** > **Resources**.
+4. Add a new resource:
+   - **URL:** `/local/casa-card/index.js`
+   - **Type:** `JavaScript Module`
 
-## Usage
-Add the custom card to your dashboard configuration:
+---
+
+## Configuration
+
+| Variable | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `type` | string | **Required** | Must be `custom:casa-provision-card`. |
+| `hidden` | boolean | `false` | Hides the card button (runs in the background waiting for hash/query parameters). |
+| `hash_url` | string | `qr-code` | The hash or query parameter name that triggers the popup (e.g. `?qr-code` or `#qr-code`). |
+| `intro_timeout` | number | `30` | Seconds to display the welcome screen before advancing (set to `0` to disable). |
+| `intro_app` | boolean | `true` | Show the app store download pane before provisioning. |
+| `ios_url` | string | `https://apps.apple.com` | iOS App Store URL. |
+| `android_url` | string | `https://play.google.com` | Android Play Store URL. |
+| `ble_progress_entity` | string | `sensor.casa_transfer_progress` | Sensor tracking BLE payload progress. |
+| `ble_state_entity` | string | `sensor.casa_transponder_state` | Sensor/text entity tracking BLE transponder state. |
+| `qr_service` | object | Optional | Configuration for the HA service used to generate provisioning QR codes. |
+| `ble_service` | object | Optional | Configuration for the HA service used to start BLE provisioning. |
+
+---
+
+## Configuration Examples
+
+### Visible Card (Standard Tile Button)
+Displays a standard clickable tile button on the dashboard.
 ```yaml
 type: custom:casa-provision-card
-# Add your configuration variables here
+hidden: false
+qr_service:
+  service: casa.generate_qr
+  data:
+    duration: 300
+ble_service:
+  service: casa.start_ble
+  data:
+    duration: 300
+```
+
+### Hidden Card (Background Handler)
+Hides the card on the dashboard. It will only open when the specified parameter is in the URL.
+```yaml
+type: custom:casa-provision-card
+hidden: true
+hash_url: guest-wifi
+qr_service:
+  service: casa.generate_qr
+  data:
+    duration: 300
+```
+
+---
+
+## Trigger Methods (For Hidden Cards)
+
+### 1. URL Query Parameter (Recommended)
+Add the parameter to your dashboard URL (e.g. `http://ha-ip:8123/lovelace/home?guest-wifi`). The HA router preserves query parameters, making them highly reliable.
+
+To trigger from a dashboard button:
+```yaml
+type: button
+name: Open WiFi Setup
+icon: mdi:wifi
+tap_action:
+  action: navigate
+  navigation_path: '?guest-wifi'
+```
+
+### 2. URL Hash
+Append the hash to the URL (e.g. `http://ha-ip:8123/lovelace/home#guest-wifi`). 
+
+To trigger from a dashboard button:
+```yaml
+type: button
+name: Open WiFi Setup
+icon: mdi:wifi
+tap_action:
+  action: navigate
+  navigation_path: '#guest-wifi'
+```
+
+### 3. Custom DOM Event
+Trigger the card without changing the URL.
+
+To trigger from a dashboard button:
+```yaml
+type: button
+name: Open WiFi Setup
+icon: mdi:wifi
+tap_action:
+  action: fire-dom-event
+  casa_action: start
 ```
