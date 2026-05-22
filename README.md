@@ -36,6 +36,47 @@ A Home Assistant Lovelace card to provision Casa devices via QR code or Bluetoot
 | `qr_service` | object | Optional | Configuration for the HA service used to generate provisioning QR codes. |
 | `ble_service` | object | Optional | Configuration for the HA service used to start BLE provisioning. |
 
+## Script Wrappers (Recommended for Security)
+
+By default, Home Assistant restricts direct access to the `casa.generate_qr` and `casa.start_ble` services to administrators and system accounts. 
+
+To allow non-admin dashboard users (such as guests or regular users) to trigger provisioning, you should wrap the service calls in a **Home Assistant Script**. Home Assistant scripts support returning response variables, which the card captures and processes automatically.
+
+### 1. Create the Scripts in Home Assistant
+Add the following to your scripts configuration:
+
+```yaml
+# Generate QR Script
+generate_casa_qr:
+  sequence:
+    - service: casa.generate_qr
+      data:
+        duration: 300
+      response_variable: qr_response
+    - stop: "Done"
+      response_variable: qr_response
+
+# Start BLE Script
+start_casa_ble:
+  sequence:
+    - service: casa.start_ble
+      data:
+        duration: 300
+      response_variable: ble_response
+    - stop: "Done"
+      response_variable: ble_response
+```
+
+### 2. Configure the Card to Call the Scripts
+Reference the scripts in your card configuration:
+```yaml
+type: custom:casa-provision-card
+qr_service:
+  service: script.generate_casa_qr
+ble_service:
+  service: script.start_casa_ble
+```
+
 ---
 
 ## Configuration Examples
