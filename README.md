@@ -27,6 +27,7 @@ A Home Assistant Lovelace card to provision Casa devices via QR code or Bluetoot
 | `type` | string | **Required** | Must be `custom:casa-provision-card`. |
 | `hidden` | boolean | `false` | Hides the card button (runs in the background waiting for hash/query parameters). |
 | `hash_url` | string | `qr-code` | The hash or query parameter name that triggers the popup (e.g. `?qr-code` or `#qr-code`). |
+| `intro` | boolean | `false` | Show the welcome pane. |
 | `intro_timeout` | number | `30` | Seconds to display the welcome screen before advancing (set to `0` to disable). |
 | `intro_app` | boolean | `true` | Show the app store download pane before provisioning. |
 | `ios_url` | string | `https://apps.apple.com` | iOS App Store URL. |
@@ -38,7 +39,7 @@ A Home Assistant Lovelace card to provision Casa devices via QR code or Bluetoot
 
 ## Script Wrappers (Recommended for Security)
 
-By default, Home Assistant restricts direct access to the `casa.generate_qr` and `casa.start_ble` services to administrators and system accounts. 
+By default, Home Assistant restricts direct access to the `casa.provision` service to administrators and system accounts. 
 
 To allow non-admin dashboard users (such as guests or regular users) to trigger provisioning, you should wrap the service calls in a **Home Assistant Script**. Home Assistant scripts support returning response variables, which the card captures and processes automatically.
 
@@ -49,9 +50,10 @@ Add the following to your scripts configuration:
 # Generate QR Script
 generate_casa_qr:
   sequence:
-    - service: casa.generate_qr
+    - service: casa.provision
       data:
-        duration: 300
+        method: qr
+        timeout_minutes: 5
       response_variable: qr_response
     - stop: "Done"
       response_variable: qr_response
@@ -59,9 +61,10 @@ generate_casa_qr:
 # Start BLE Script
 start_casa_ble:
   sequence:
-    - service: casa.start_ble
+    - service: casa.provision
       data:
-        duration: 300
+        method: ble
+        timeout_minutes: 5
       response_variable: ble_response
     - stop: "Done"
       response_variable: ble_response
@@ -87,13 +90,15 @@ Displays a standard clickable tile button on the dashboard.
 type: custom:casa-provision-card
 hidden: false
 qr_service:
-  service: casa.generate_qr
+  service: casa.provision
   data:
-    duration: 300
+    method: qr
+    timeout_minutes: 5
 ble_service:
-  service: casa.start_ble
+  service: casa.provision
   data:
-    duration: 300
+    method: ble
+    timeout_minutes: 5
 ```
 
 ### Hidden Card (Background Handler)
@@ -103,9 +108,10 @@ type: custom:casa-provision-card
 hidden: true
 hash_url: guest-wifi
 qr_service:
-  service: casa.generate_qr
+  service: casa.provision
   data:
-    duration: 300
+    method: qr
+    timeout_minutes: 5
 ```
 
 ---
@@ -150,3 +156,9 @@ tap_action:
   action: fire-dom-event
   casa_action: start
 ```
+
+---
+
+## Version
+
+The card logs its version to the browser console on load (`CASA-PROVISION-CARD <version>`).

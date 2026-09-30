@@ -2,6 +2,9 @@ const LitElement = window.LitElement || Object.getPrototypeOf(customElements.get
 const html = LitElement.prototype.html;
 const css = LitElement.prototype.css;
 
+const CARD_VERSION = "26.09.30";
+console.info(`%c CASA-PROVISION-CARD %c ${CARD_VERSION} `, "color: white; background: #1976d2; font-weight: bold;", "color: #1976d2; background: white; font-weight: bold;");
+
 // ============================================================================
 // NATIVE FIRE EVENT
 // ============================================================================
@@ -40,7 +43,7 @@ export class CasaProvisionCardEditor extends LitElement {
       { name: 'ios_url', selector: { text: {} }, default: 'https://apps.apple.com' },
       { name: 'android_url', selector: { text: {} }, default: 'https://play.google.com' },
       { name: 'ble_progress_entity', selector: { entity: { domain: 'sensor' } } },
-      { name: 'ble_state_entity', selector: { entity: { domain: 'sensor', domain: 'text' } } },
+      { name: 'ble_state_entity', selector: { entity: { domain: ['sensor', 'text'] } } },
       { name: 'qr_service', selector: { object: {} } },
       { name: 'ble_service', selector: { object: {} } },
     ];
@@ -97,7 +100,6 @@ export class CasaProvisionCard extends LitElement {
       qrData: { state: true },
       countdown: { state: true },
       isExpired: { state: true },
-      appQrUrl: { state: true },
       guestData: { state: true },
       serviceError: { state: true },
       lastAction: { state: true },
@@ -112,7 +114,6 @@ export class CasaProvisionCard extends LitElement {
     this.countdown = 0;
     this.isExpired = false;
     this.countdownTimer = undefined;
-    this.appQrUrl = null;
     this.guestData = null;
     this.serviceError = null;
     this.lastAction = null;
@@ -267,7 +268,6 @@ export class CasaProvisionCard extends LitElement {
 
       this.clearTimers();
       this.qrData = null;
-      this.appQrUrl = null;
       this.guestData = event.data; // Raw event.data perfectly matches your JSON payload
       this.activePane = 'success';
       setTimeout(() => this.closePopup(), 4000);
@@ -276,7 +276,6 @@ export class CasaProvisionCard extends LitElement {
 
   startFlow() {
     this.activePane = this.config.intro ? 'intro' : (this.config.intro_app ? 'app_links' : 'selection');
-    this.appQrUrl = null;
     this.guestData = null;
     this.serviceError = null;
     this.lastAction = null;
@@ -292,7 +291,6 @@ export class CasaProvisionCard extends LitElement {
 
   nextPane() {
     this.clearTimers();
-    this.appQrUrl = null;
 
     if (this.activePane === 'intro' && this.config.intro_app) {
       this.activePane = 'app_links';
@@ -324,7 +322,6 @@ export class CasaProvisionCard extends LitElement {
 
     this.activePane = 'hidden';
     this.qrData = null;
-    this.appQrUrl = null;
     this.guestData = null;
     this.serviceError = null;
     this.isExpired = false;
@@ -418,9 +415,9 @@ export class CasaProvisionCard extends LitElement {
       this.qrData = result.response || result;
 
       if (this.qrData.error) throw new Error(this.qrData.error);
-      if (!this.qrData.url_path) throw new Error(this.qrData.message || "Invalid response: No QR path provided.");
+      if (!this.qrData.qr_data_uri && !this.qrData.url_path) throw new Error(this.qrData.message || "Invalid response: no QR image returned.");
 
-      let expiresAt = this.qrData.qr_expires_at;
+      let expiresAt = this.qrData.expires_at ?? this.qrData.qr_expires_at;
       if (typeof expiresAt === 'string') {
         expiresAt = Math.floor(new Date(expiresAt).getTime() / 1000);
       }
@@ -456,7 +453,7 @@ export class CasaProvisionCard extends LitElement {
       });
 
       const responseData = result.response || result;
-      let expiresAt = responseData.ble_expires_at;
+      let expiresAt = responseData.expires_at ?? responseData.ble_expires_at;
       if (typeof expiresAt === 'string') {
         expiresAt = Math.floor(new Date(expiresAt).getTime() / 1000);
       }
@@ -531,31 +528,20 @@ export class CasaProvisionCard extends LitElement {
             <div class="pane pane-apps fade-in">
               <h2>Download the App</h2>
               
-              ${this.appQrUrl ? html`
-                <div class="qr-container fade-in">
-                  <p class="casa-subtitle">Scan to download</p>
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(this.appQrUrl)}&margin=10" alt="App Store QR Code" />
-                </div>
-                <div class="casa-btn-row" style="justify-content: center; margin-top: 16px;">
-                  <button class="casa-btn secondary" @click=${() => this.appQrUrl = null}>Back</button>
-                  <button class="casa-btn blue" @click=${this.nextPane}>Continue</button>
-                </div>
-              ` : html`
-                <p class="casa-subtitle" style="margin-bottom: 24px;">Select your platform to get the app.</p>
-                <div class="store-icons">
-                  <div class="store-icon ios" @click=${() => this.appQrUrl = this.config.ios_url}>
-                    <ha-icon icon="mdi:apple"></ha-icon>
-                    <span>iOS</span>
-                  </div>
-                  <div class="store-icon android" @click=${() => this.appQrUrl = this.config.android_url}>
-                    <ha-icon icon="mdi:android"></ha-icon>
-                    <span>Android</span>
-                  </div>
-                </div>
-                <div class="casa-btn-row" style="justify-content: center; margin-top: 24px;">
-                  <button class="casa-btn blue" @click=${this.nextPane}>Skip to Provisioning</button>
-                </div>
-              `}
+              <p class="casa-subtitle" style="margin-bottom: 24px;">Select your platform to get the app.</p>
+              <div class="store-icons">
+                <a class="store-icon ios" href="${this.config.ios_url}" target="_blank" rel="noopener">
+                  <ha-icon icon="mdi:apple"></ha-icon>
+                  <span>iOS</span>
+                </a>
+                <a class="store-icon android" href="${this.config.android_url}" target="_blank" rel="noopener">
+                  <ha-icon icon="mdi:android"></ha-icon>
+                  <span>Android</span>
+                </a>
+              </div>
+              <div class="casa-btn-row" style="justify-content: center; margin-top: 24px;">
+                <button class="casa-btn blue" @click=${this.nextPane}>Skip to Provisioning</button>
+              </div>
             </div>
           ` : ''}
 
@@ -738,7 +724,7 @@ export class CasaProvisionCard extends LitElement {
         <p class="casa-subtitle">Scan the code below to connect your guest device.</p>
         
         <div class="qr-container ${this.isExpired ? 'expired' : ''}">
-          <img src="${this.qrData.url_path}" alt="Provisioning QR Code" />
+          <img src="${this.qrData.qr_data_uri || this.qrData.url_path}" alt="Provisioning QR Code" />
           ${this.isExpired ? html`<div class="expired-text">QR Code Expired</div>` : ''}
         </div>
         
@@ -842,7 +828,7 @@ export class CasaProvisionCard extends LitElement {
       .qr-container.expired img { filter: blur(8px); }
       .expired-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(211, 47, 47, 0.9); color: white; padding: 6px 12px; border-radius: 4px; font-weight: 500; }
       .store-icons { display: flex; justify-content: center; gap: 24px; width: 100%; margin-bottom: 1rem; }
-      .store-icon { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 90px; height: 90px; border-radius: 6px; background: rgba(0,0,0,0.03); color: #4a4a4a; cursor: pointer; transition: transform 0.15s; border: 2px solid transparent; }
+      .store-icon { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 90px; height: 90px; border-radius: 6px; background: rgba(0,0,0,0.03); color: #4a4a4a; text-decoration: none; cursor: pointer; transition: transform 0.15s; border: 2px solid transparent; }
       .store-icon:hover { transform: translateY(-2px); }
       .store-icon.ios:hover { border-color: #007aff; color: #007aff; }
       .store-icon.android:hover { border-color: #3ddc84; color: #3ddc84; }
